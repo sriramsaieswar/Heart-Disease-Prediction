@@ -1,149 +1,122 @@
-# ==========================================
-# Heart Disease Prediction Using Logistic Regression
-# ==========================================
-
 import streamlit as st
 import pandas as pd
 import numpy as np
-
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score
 
-# ------------------------------------------
-# Load Dataset
-# ------------------------------------------
+st.set_page_config(page_title="Heart Disease Prediction", page_icon="❤️", layout="wide")
 
-df = pd.read_csv("framingham.csv")
+# ----------------------- Load Dataset -----------------------
+@st.cache_data
+def load_data():
+    data = pd.read_csv("heart.csv")      # Keep heart.csv in the same folder
+    X = data.drop(columns="target", axis=1)
+    y = data["target"]
+    return X, y
 
-# ------------------------------------------
-# Data Cleaning
-# ------------------------------------------
+X, y = load_data()
 
-df.drop(columns=["education"], inplace=True)
-df.rename(columns={"male": "Sex_male"}, inplace=True)
-df.dropna(inplace=True)
+# ----------------------- Train Model ------------------------
+@st.cache_resource
+def train_model():
+    model = LogisticRegression(max_iter=1000)
+    model.fit(X, y)
+    return model
 
-# ------------------------------------------
-# Select Features
-# ------------------------------------------
+model = train_model()
 
-X = df[['age',
-        'Sex_male',
-        'cigsPerDay',
-        'totChol',
-        'sysBP',
-        'glucose']]
-
-y = df['TenYearCHD']
-
-# ------------------------------------------
-# Feature Scaling
-# ------------------------------------------
-
-scaler = StandardScaler()
-X = scaler.fit_transform(X)
-
-# ------------------------------------------
-# Train-Test Split
-# ------------------------------------------
-
-X_train, X_test, y_train, y_test = train_test_split(
-    X,
-    y,
-    test_size=0.30,
-    random_state=4
-)
-
-# ------------------------------------------
-# Train Model
-# ------------------------------------------
-
-model = LogisticRegression()
-model.fit(X_train, y_train)
-
-# ------------------------------------------
-# Model Accuracy
-# ------------------------------------------
-
-y_pred = model.predict(X_test)
-
-accuracy = accuracy_score(y_test, y_pred)
-
-# ------------------------------------------
-# Streamlit UI
-# ------------------------------------------
-
-st.set_page_config(
-    page_title="Heart Disease Prediction",
-    page_icon="❤️"
-)
-
+# ----------------------- UI -----------------------
 st.title("❤️ Heart Disease Prediction System")
+st.markdown("Enter the patient details below and click **Predict**.")
 
-st.write("### Enter Patient Details")
+col1, col2 = st.columns(2)
 
-age = st.number_input("Age", 20, 100, 52)
+with col1:
+    age = st.number_input("Age", 1, 120, 45)
+    sex = st.selectbox("Sex", ["Male", "Female"])
+    cp = st.selectbox(
+        "Chest Pain Type",
+        [0, 1, 2, 3],
+        format_func=lambda x: [
+            "Typical Angina",
+            "Atypical Angina",
+            "Non-anginal Pain",
+            "Asymptomatic",
+        ][x],
+    )
+    trestbps = st.number_input("Resting Blood Pressure", 80, 250, 120)
+    chol = st.number_input("Serum Cholesterol (mg/dl)", 100, 600, 240)
+    fbs = st.selectbox("Fasting Blood Sugar > 120 mg/dl", [0, 1])
 
-gender = st.selectbox(
-    "Gender",
-    ["Female", "Male"]
+with col2:
+    restecg = st.selectbox("Resting ECG", [0, 1, 2])
+    thalach = st.number_input("Maximum Heart Rate", 60, 250, 150)
+    exang = st.selectbox("Exercise Induced Angina", [0, 1])
+    oldpeak = st.number_input("Oldpeak", 0.0, 10.0, 1.0, step=0.1)
+    slope = st.selectbox("Slope", [0, 1, 2])
+    ca = st.selectbox("Major Vessels", [0, 1, 2, 3, 4])
+    thal = st.selectbox("Thal", [0, 1, 2, 3])
+
+# Convert Sex
+sex = 1 if sex == "Male" else 0
+
+input_data = np.array(
+    [
+        [
+            age,
+            sex,
+            cp,
+            trestbps,
+            chol,
+            fbs,
+            restecg,
+            thalach,
+            exang,
+            oldpeak,
+            slope,
+            ca,
+            thal,
+        ]
+    ]
 )
-
-Sex_male = 1 if gender == "Male" else 0
-
-cigsPerDay = st.number_input(
-    "Cigarettes Per Day",
-    0,
-    50,
-    10
-)
-
-totChol = st.number_input(
-    "Total Cholesterol",
-    100,
-    600,
-    220
-)
-
-sysBP = st.number_input(
-    "Systolic Blood Pressure",
-    80,
-    250,
-    140
-)
-
-glucose = st.number_input(
-    "Glucose Level",
-    40,
-    300,
-    95
-)
-
-if st.button("Predict"):
-
-    patient = np.array([[age,
-                         Sex_male,
-                         cigsPerDay,
-                         totChol,
-                         sysBP,
-                         glucose]])
-
-    patient = scaler.transform(patient)
-
-    prediction = model.predict(patient)
-
-    probability = model.predict_proba(patient)[0][1]
-
-    st.subheader("Prediction Result")
-
-    if prediction[0] == 1:
-        st.error("⚠️ High Risk of Heart Disease")
-    else:
-        st.success("✅ Low Risk of Heart Disease")
-
-    st.write(f"Prediction Probability: {probability:.2%}")
 
 st.markdown("---")
-st.write(f"**Model Accuracy:** {accuracy:.2%}")
+
+if st.button("🔍 Predict", use_container_width=True):
+    prediction = model.predict(input_data)[0]
+    probability = model.predict_proba(input_data)[0]
+
+    if prediction == 1:
+        st.error("⚠️ High Risk: The person is likely to have Heart Disease.")
+        st.write(f"**Confidence:** {probability[1]*100:.2f}%")
+    else:
+        st.success("✅ Low Risk: The person is unlikely to have Heart Disease.")
+        st.write(f"**Confidence:** {probability[0]*100:.2f}%")
+
+st.markdown("---")
+st.subheader("Dataset Preview")
+st.dataframe(pd.read_csv("heart.csv").head())
+
+st.sidebar.header("About")
+st.sidebar.info(
+    """
+    **Heart Disease Prediction System**
+
+    Machine Learning Model:
+    - Logistic Regression
+
+    Input Features:
+    - Age
+    - Sex
+    - Chest Pain Type
+    - Blood Pressure
+    - Cholesterol
+    - Fasting Blood Sugar
+    - ECG Results
+    - Maximum Heart Rate
+    - Exercise Induced Angina
+    - Oldpeak
+    - Slope
+    - Major Vessels
+    - Thal
+    """
+)
